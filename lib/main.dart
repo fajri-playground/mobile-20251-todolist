@@ -5,9 +5,15 @@ import 'package:provider/provider.dart';
 class Todo {
   final String id;
   final String title;
+  final DateTime createdAt;
   bool isCompleted;
 
-  Todo({required this.id, required this.title, this.isCompleted = false});
+  Todo({
+    required this.id,
+    required this.title,
+    required this.createdAt,
+    this.isCompleted = false,
+  });
 }
 
 // Enum untuk filter
@@ -19,24 +25,48 @@ class TodoProvider extends ChangeNotifier {
   TodoFilter _currentFilter = TodoFilter.all;
 
   List<Todo> get todos {
+    List<Todo> filteredTodos;
+
     switch (_currentFilter) {
       case TodoFilter.active:
-        return _todos.where((todo) => !todo.isCompleted).toList();
+        filteredTodos = _todos.where((todo) => !todo.isCompleted).toList();
+        break;
       case TodoFilter.done:
-        return _todos.where((todo) => todo.isCompleted).toList();
+        filteredTodos = _todos.where((todo) => todo.isCompleted).toList();
+        break;
       case TodoFilter.all:
-        return _todos;
+        filteredTodos = _todos;
+        break;
     }
+
+    // Sorting logic: Active todos first (newest first), then completed todos (newest first)
+    if (_currentFilter == TodoFilter.all) {
+      filteredTodos.sort((a, b) {
+        // First sort by completion status (active first)
+        if (a.isCompleted != b.isCompleted) {
+          return a.isCompleted ? 1 : -1;
+        }
+        // Then sort by creation time (newest first)
+        return b.createdAt.compareTo(a.createdAt);
+      });
+    } else {
+      // For active or done filter, just sort by newest first
+      filteredTodos.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
+
+    return filteredTodos;
   }
 
   TodoFilter get currentFilter => _currentFilter;
 
   void addTodo(String title) {
     if (title.trim().length >= 3) {
+      final now = DateTime.now();
       _todos.add(
         Todo(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          id: now.millisecondsSinceEpoch.toString(),
           title: title.trim(),
+          createdAt: now,
         ),
       );
       notifyListeners();
@@ -45,6 +75,11 @@ class TodoProvider extends ChangeNotifier {
 
   void removeTodo(String id) {
     _todos.removeWhere((todo) => todo.id == id);
+    notifyListeners();
+  }
+
+  void restoreTodo(Todo todo) {
+    _todos.add(todo);
     notifyListeners();
   }
 
@@ -174,48 +209,126 @@ class TodoPage extends StatelessWidget {
                     itemCount: todoProvider.todos.length,
                     itemBuilder: (context, index) {
                       final todo = todoProvider.todos[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
+                      return Dismissible(
+                        key: Key(todo.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 12,
                             vertical: 4,
                           ),
-                          leading: Checkbox(
-                            value: todo.isCompleted,
-                            onChanged: (_) => todoProvider.toggleTodo(todo.id),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
-                            ),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          title: Text(
-                            todo.title,
-                            style: TextStyle(
-                              decoration: todo.isCompleted
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                              color: todo.isCompleted ? Colors.grey : null,
-                              fontSize: 16,
-                            ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Text(
+                                "Hapus",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(
+                                Icons.delete_outline,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                            ],
                           ),
-                          trailing: IconButton(
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              color: Colors.red,
+                        ),
+                        confirmDismiss: (direction) async {
+                          return await _showSwipeDeleteConfirmation(
+                            context,
+                            todo,
+                          );
+                        },
+                        onDismissed: (direction) {
+                          todoProvider.removeTodo(todo.id);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Todo "${todo.title}" berhasil dihapus',
+                              ),
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              action: SnackBarAction(
+                                label: 'UNDO',
+                                onPressed: () {
+                                  // Re-add the todo using the provider method
+                                  todoProvider.restoreTodo(todo);
+                                },
+                              ),
                             ),
-                            onPressed: () => _showDeleteConfirmation(
-                              context,
-                              todo,
-                              todoProvider,
+                          );
+                        },
+                        child: Card(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
                             ),
-                            splashRadius: 24,
+                            leading: Checkbox(
+                              value: todo.isCompleted,
+                              onChanged: (_) =>
+                                  todoProvider.toggleTodo(todo.id),
+                              shape: const CircleBorder(),
+                              activeColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                            ),
+                            title: Text(
+                              todo.title,
+                              style: TextStyle(
+                                decoration: todo.isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                                color: todo.isCompleted ? Colors.grey : null,
+                                fontSize: 16,
+                              ),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Show creation time for better UX
+                                Text(
+                                  _formatTime(todo.createdAt),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[500],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red,
+                                  ),
+                                  onPressed: () => _showDeleteConfirmation(
+                                    context,
+                                    todo,
+                                    todoProvider,
+                                  ),
+                                  splashRadius: 24,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       );
@@ -236,6 +349,55 @@ class TodoPage extends StatelessWidget {
       case TodoFilter.all:
         return "Belum ada todo 😊\nTambahkan tugas pertama Anda!";
     }
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inMinutes < 1) {
+      return "Baru saja";
+    } else if (difference.inHours < 1) {
+      return "${difference.inMinutes}m";
+    } else if (difference.inDays < 1) {
+      return "${difference.inHours}j";
+    } else if (difference.inDays < 7) {
+      return "${difference.inDays}h";
+    } else {
+      return "${dateTime.day}/${dateTime.month}";
+    }
+  }
+
+  Future<bool?> _showSwipeDeleteConfirmation(
+    BuildContext context,
+    Todo todo,
+  ) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text('Hapus Todo'),
+          content: Text('Yakin ingin menghapus "${todo.title}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Hapus'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showDeleteConfirmation(
