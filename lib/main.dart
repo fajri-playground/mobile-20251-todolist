@@ -59,6 +59,13 @@ class TodoProvider extends ChangeNotifier {
 
   TodoFilter get currentFilter => _currentFilter;
 
+  int get activeTodosCount => _todos.where((todo) => !todo.isCompleted).length;
+
+  int get completedTodosCount =>
+      _todos.where((todo) => todo.isCompleted).length;
+
+  int get totalTodosCount => _todos.length;
+
   void addTodo(String title) {
     if (title.trim().length >= 3) {
       final now = DateTime.now();
@@ -185,6 +192,40 @@ class TodoPage extends StatelessWidget {
               ],
             ),
           ),
+          // Counter Section - menampilkan jumlah tugas aktif
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _TaskCounter(
+                    label: "Aktif",
+                    count: todoProvider.activeTodosCount,
+                    color: Colors.orange,
+                    icon: Icons.schedule,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _TaskCounter(
+                    label: "Selesai",
+                    count: todoProvider.completedTodosCount,
+                    color: Colors.green,
+                    icon: Icons.check_circle,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _TaskCounter(
+                    label: "Total",
+                    count: todoProvider.totalTodosCount,
+                    color: Colors.blue,
+                    icon: Icons.list_alt,
+                  ),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: todoProvider.todos.isEmpty
                 ? Center(
@@ -226,19 +267,10 @@ class TodoPage extends StatelessWidget {
                           child: const Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              Text(
-                                "Hapus",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              SizedBox(width: 8),
                               Icon(
                                 Icons.delete_outline,
                                 color: Colors.white,
-                                size: 28,
+                                size: 20,
                               ),
                             ],
                           ),
@@ -303,31 +335,12 @@ class TodoPage extends StatelessWidget {
                                 fontSize: 16,
                               ),
                             ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // Show creation time for better UX
-                                Text(
-                                  _formatTime(todo.createdAt),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[500],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.delete_outline,
-                                    color: Colors.red,
-                                  ),
-                                  onPressed: () => _showDeleteConfirmation(
-                                    context,
-                                    todo,
-                                    todoProvider,
-                                  ),
-                                  splashRadius: 24,
-                                ),
-                              ],
+                            trailing: Text(
+                              _formatTime(todo.createdAt),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[500],
+                              ),
                             ),
                           ),
                         ),
@@ -388,51 +401,6 @@ class TodoPage extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop(true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Hapus'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showDeleteConfirmation(
-    BuildContext context,
-    Todo todo,
-    TodoProvider provider,
-  ) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text('Hapus Todo'),
-          content: Text('Apakah Anda yakin ingin menghapus "${todo.title}"?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                provider.removeTodo(todo.id);
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Todo berhasil dihapus'),
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                );
-              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
@@ -568,6 +536,56 @@ class _FilterChip extends StatelessWidget {
         color: isSelected ? colorScheme.primary : Colors.grey[600],
         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
         fontSize: 14,
+      ),
+    );
+  }
+}
+
+// Widget untuk menampilkan counter tugas
+class _TaskCounter extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  final IconData icon;
+
+  const _TaskCounter({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3), width: 1),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 4),
+          Text(
+            count.toString(),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color.withOpacity(0.8),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
